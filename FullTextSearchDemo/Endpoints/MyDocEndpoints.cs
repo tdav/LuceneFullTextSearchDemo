@@ -142,18 +142,20 @@ public static class MyDocEndpoints
     {
         try
         {
-            // Create cache key based on query parameters
-            var cacheKey = $"movies_fulltext_{query.Term}_{query.PageNumber}_{query.PageSize}";
+            // Create cache key based on query parameters using hash to avoid cache poisoning
+            var cacheKeyData = $"movies_fulltext_{query.Term}_{query.PageNumber}_{query.PageSize}";
             
             if (query.FacetGenreFacets != null)
             {
-                cacheKey += $"_genres_{string.Join("_", query.FacetGenreFacets)}";
+                cacheKeyData += $"_genres_{string.Join("_", query.FacetGenreFacets)}";
             }
             
             if (query.TitleTypeFacets != null)
             {
-                cacheKey += $"_types_{string.Join("_", query.TitleTypeFacets)}";
+                cacheKeyData += $"_types_{string.Join("_", query.TitleTypeFacets)}";
             }
+
+            var cacheKey = $"movies_{cacheKeyData.GetHashCode()}";
 
             var result = cacheService.GetOrCreate(cacheKey, () => movieService.FullTextSearchMovies(query));
             return TypedResults.Ok<object>(result!);
@@ -211,18 +213,20 @@ public static class MyDocEndpoints
     {
         try
         {
-            // Create cache key based on query parameters
-            var cacheKey = $"products_fulltext_{query.Search}_{query.PageNumber}_{query.PageSize}";
+            // Create cache key based on query parameters using hash to avoid cache poisoning
+            var cacheKeyData = $"products_fulltext_{query.Search}_{query.PageNumber}_{query.PageSize}";
             
             if (query.Categories != null)
             {
-                cacheKey += $"_categories_{string.Join("_", query.Categories)}";
+                cacheKeyData += $"_categories_{string.Join("_", query.Categories)}";
             }
             
             if (query.InSale.HasValue)
             {
-                cacheKey += $"_insale_{query.InSale.Value}";
+                cacheKeyData += $"_insale_{query.InSale.Value}";
             }
+
+            var cacheKey = $"products_{cacheKeyData.GetHashCode()}";
 
             var result = cacheService.GetOrCreate(cacheKey, () => productService.FullSearchProducts(query));
             return TypedResults.Ok<object>(result!);
@@ -272,7 +276,7 @@ public static class MyDocEndpoints
             // Clear cache for products since we updated one
             cacheService.Clear();
             
-            return TypedResults.Ok("Product updated to the search index.");
+            return TypedResults.Ok("Product updated in the search index.");
         }
         catch (Exception ex)
         {
@@ -295,7 +299,7 @@ public static class MyDocEndpoints
             // Clear cache for products since we deleted one
             cacheService.Clear();
             
-            return TypedResults.Ok("Product deleted to the search index.");
+            return TypedResults.Ok("Product deleted from the search index.");
         }
         catch (Exception ex)
         {
