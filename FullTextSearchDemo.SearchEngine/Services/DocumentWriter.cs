@@ -156,6 +156,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     public void AddDocument([NotNull] T generic)
     {
         var document = generic.ConvertToDocument();
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.AddDocument(GetDocument(document));
 
         Commit();
@@ -163,6 +164,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void Clear()
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.DeleteAll();
 
         Commit();
@@ -170,9 +172,9 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void AddDocuments(IEnumerable<T> documents)
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         foreach (var generic in documents)
         {
-           
             _writer?.AddDocument(GetDocument(generic));
         }
 
@@ -182,6 +184,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     public void UpdateDocument([NotNull] T generic)
     {
         var document = generic.ConvertToDocument();
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.UpdateDocument(new Term(nameof(IDocument.UniqueKey), generic.UniqueKey), GetDocument(document));
 
         Commit();
@@ -189,6 +192,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void RemoveDocument([NotNull] T generic)
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.DeleteDocuments(new Term(nameof(IDocument.UniqueKey), generic.UniqueKey));
 
         Commit();
@@ -198,6 +202,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     {
         // Don't dispose shared writers and directories
         // They are managed at the static level and shared across instances
+        // In a web application, these live for the application lifetime
         _initialized = false;
     }
 
