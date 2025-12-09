@@ -1,7 +1,6 @@
 using FullTextSearchDemo.Models;
 using FullTextSearchDemo.Parameters;
 using FullTextSearchDemo.Services;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace FullTextSearchDemo.Endpoints;
 
@@ -13,7 +12,9 @@ public static class MyDocEndpoints
         var productsGroup = group.MapGroup("/products").WithTags("Products");
 
         // Movies endpoints
-        moviesGroup.MapGet("/", GetMovies)
+        moviesGroup.MapGet("/", (
+            [AsParameters] GetMoviesQuery query,
+            IMyDocService service) => service.GetMovies(query))
             .WithName("GetMovies")
             .WithOpenApi(operation =>
             {
@@ -22,7 +23,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        moviesGroup.MapGet("/search", SearchMovies)
+        moviesGroup.MapGet("/search", (
+            [AsParameters] SearchMovieQuery query,
+            IMyDocService service) => service.SearchMovies(query))
             .WithName("SearchMovies")
             .WithOpenApi(operation =>
             {
@@ -31,7 +34,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        moviesGroup.MapGet("/fulltextsearch", FullTextSearchMovies)
+        moviesGroup.MapGet("/fulltextsearch", (
+            [AsParameters] SearchMovieQuery query,
+            IMyDocService service) => service.FullTextSearchMovies(query))
             .WithName("FullTextSearchMovies")
             .WithOpenApi(operation =>
             {
@@ -41,7 +46,9 @@ public static class MyDocEndpoints
             });
 
         // Products endpoints
-        productsGroup.MapGet("/", GetProducts)
+        productsGroup.MapGet("/", (
+            [AsParameters] GetProductsQuery query,
+            IMyDocService service) => service.GetProducts(query))
             .WithName("GetProducts")
             .WithOpenApi(operation =>
             {
@@ -50,7 +57,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        productsGroup.MapGet("/search", SearchProducts)
+        productsGroup.MapGet("/search", (
+            [AsParameters] ProductsSearchQuery query,
+            IMyDocService service) => service.SearchProducts(query))
             .WithName("SearchProducts")
             .WithOpenApi(operation =>
             {
@@ -59,7 +68,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        productsGroup.MapGet("/fulltextsearch", FullTextSearchProducts)
+        productsGroup.MapGet("/fulltextsearch", (
+            [AsParameters] ProductsSearchQuery query,
+            IMyDocService service) => service.FullTextSearchProducts(query))
             .WithName("FullTextSearchProducts")
             .WithOpenApi(operation =>
             {
@@ -68,7 +79,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        productsGroup.MapPost("/", PostProduct)
+        productsGroup.MapPost("/", (
+            Product product,
+            IMyDocService service) => service.AddProduct(product))
             .WithName("AddProduct")
             .WithOpenApi(operation =>
             {
@@ -77,7 +90,10 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        productsGroup.MapPut("/{id:int}", PutProduct)
+        productsGroup.MapPut("/{id:int}", (
+            int id,
+            Product product,
+            IMyDocService service) => service.UpdateProduct(id, product))
             .WithName("UpdateProduct")
             .WithOpenApi(operation =>
             {
@@ -86,7 +102,9 @@ public static class MyDocEndpoints
                 return operation;
             });
 
-        productsGroup.MapDelete("/{id:int}", DeleteProduct)
+        productsGroup.MapDelete("/{id:int}", (
+            int id,
+            IMyDocService service) => service.DeleteProduct(id))
             .WithName("DeleteProduct")
             .WithOpenApi(operation =>
             {
@@ -96,217 +114,5 @@ public static class MyDocEndpoints
             });
 
         return group;
-    }
-
-    // Movies handlers
-    private static Results<Ok<object>, ProblemHttpResult> GetMovies(
-        [AsParameters] GetMoviesQuery query,
-        IMovieService movieService)
-    {
-        try
-        {
-            var result = movieService.GetMovies(query);
-            return TypedResults.Ok<object>(result);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error retrieving movies");
-        }
-    }
-
-    private static Results<Ok<object>, ProblemHttpResult> SearchMovies(
-        [AsParameters] SearchMovieQuery query,
-        IMovieService movieService)
-    {
-        try
-        {
-            var result = movieService.SearchMovies(query);
-            return TypedResults.Ok<object>(result);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error searching movies");
-        }
-    }
-
-    private static Results<Ok<object>, ProblemHttpResult> FullTextSearchMovies(
-        [AsParameters] SearchMovieQuery query,
-        IMovieService movieService,
-        ISearchCacheService cacheService)
-    {
-        try
-        {
-            // Create cache key based on query parameters using hash to avoid cache poisoning
-            var cacheKeyData = $"movies_fulltext_{query.Term}_{query.PageNumber}_{query.PageSize}";
-            
-            if (query.FacetGenreFacets != null)
-            {
-                cacheKeyData += $"_genres_{string.Join("_", query.FacetGenreFacets)}";
-            }
-            
-            if (query.TitleTypeFacets != null)
-            {
-                cacheKeyData += $"_types_{string.Join("_", query.TitleTypeFacets)}";
-            }
-
-            var cacheKey = $"movies_{cacheKeyData.GetHashCode()}";
-
-            var result = cacheService.GetOrCreate(cacheKey, () => movieService.FullTextSearchMovies(query));
-            return TypedResults.Ok<object>(result!);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error performing full-text search on movies");
-        }
-    }
-
-    // Products handlers
-    private static Results<Ok<object>, ProblemHttpResult> GetProducts(
-        [AsParameters] GetProductsQuery query,
-        IProductService productService)
-    {
-        try
-        {
-            var result = productService.GetProducts(query);
-            return TypedResults.Ok<object>(result);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error retrieving products");
-        }
-    }
-
-    private static Results<Ok<object>, ProblemHttpResult> SearchProducts(
-        [AsParameters] ProductsSearchQuery query,
-        IProductService productService)
-    {
-        try
-        {
-            var result = productService.SearchProducts(query);
-            return TypedResults.Ok<object>(result);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error searching products");
-        }
-    }
-
-    private static Results<Ok<object>, ProblemHttpResult> FullTextSearchProducts(
-        [AsParameters] ProductsSearchQuery query,
-        IProductService productService,
-        ISearchCacheService cacheService)
-    {
-        try
-        {
-            // Create cache key based on query parameters using hash to avoid cache poisoning
-            var cacheKeyData = $"products_fulltext_{query.Search}_{query.PageNumber}_{query.PageSize}";
-            
-            if (query.Categories != null)
-            {
-                cacheKeyData += $"_categories_{string.Join("_", query.Categories)}";
-            }
-            
-            if (query.InSale.HasValue)
-            {
-                cacheKeyData += $"_insale_{query.InSale.Value}";
-            }
-
-            var cacheKey = $"products_{cacheKeyData.GetHashCode()}";
-
-            var result = cacheService.GetOrCreate(cacheKey, () => productService.FullSearchProducts(query));
-            return TypedResults.Ok<object>(result!);
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error performing full-text search on products");
-        }
-    }
-
-    private static Results<Ok<string>, ProblemHttpResult> PostProduct(
-        Product product,
-        IProductService productService,
-        ISearchCacheService cacheService)
-    {
-        try
-        {
-            productService.Add(product);
-            
-            // Clear cache for products since we added a new one
-            cacheService.Clear();
-            
-            return TypedResults.Ok("Product added to the search index.");
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error adding product");
-        }
-    }
-
-    private static Results<Ok<string>, ProblemHttpResult> PutProduct(
-        int id,
-        Product product,
-        IProductService productService,
-        ISearchCacheService cacheService)
-    {
-        try
-        {
-            productService.Update(id, product);
-            
-            // Clear cache for products since we updated one
-            cacheService.Clear();
-            
-            return TypedResults.Ok("Product updated in the search index.");
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error updating product");
-        }
-    }
-
-    private static Results<Ok<string>, ProblemHttpResult> DeleteProduct(
-        int id,
-        IProductService productService,
-        ISearchCacheService cacheService)
-    {
-        try
-        {
-            productService.Delete(id);
-            
-            // Clear cache for products since we deleted one
-            cacheService.Clear();
-            
-            return TypedResults.Ok("Product deleted from the search index.");
-        }
-        catch (Exception ex)
-        {
-            return TypedResults.Problem(
-                detail: ex.Message,
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error deleting product");
-        }
     }
 }

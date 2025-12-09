@@ -25,6 +25,7 @@ public partial class Program
         builder.Services.AddScoped<IProductService, ProductService>();
         builder.Services.AddScoped<IMovieService, MovieService>();
         builder.Services.AddScoped<ISearchCacheService, SearchCacheService>();
+        builder.Services.AddScoped<IMyDocService, MyDocService>();
         
         builder.Services.AddSearchEngineServices(new ProductConfiguration());
         builder.Services.AddSearchEngineServices(new MoviesConfiguration());

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using FullTextSearchDemo.SearchEngine.Configuration;
 using FullTextSearchDemo.SearchEngine.Helpers;
@@ -16,14 +17,20 @@ namespace FullTextSearchDemo.SearchEngine.Services;
 
 internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where T : IDocument
 {
+    private static readonly ConcurrentDictionary<string, RAMDirectory> IndexDirectories = new();
+    private static readonly ConcurrentDictionary<string, RAMDirectory> FacetDirectories = new();
+    private static readonly ConcurrentDictionary<string, IndexWriter> IndexWriters = new();
+    private static readonly ConcurrentDictionary<string, DirectoryTaxonomyWriter> TaxonomyWriters = new();
+    private static readonly object IndexLock = new();
+    private static readonly object FacetLock = new();
+
     private readonly FacetsConfig? _facetsConfig;
     private readonly string _indexName;
     private readonly string? _facetIndexName;
     
-    private LuceneDirectory? _facetIndexDirectory;
     private bool _initialized;
-    private DirectoryTaxonomyWriter? _taxonomyWriter;
     private IndexWriter? _writer;
+    private DirectoryTaxonomyWriter? _taxonomyWriter;
 
     public DocumentWriter(IIndexConfiguration<T> configuration)
     {
@@ -37,6 +44,93 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
         _facetsConfig = configuration.FacetConfiguration?.GetFacetConfig();
     }
 
+    public static RAMDirectory GetOrCreateIndexDirectory(string indexName)
+    {
+        if (IndexDirectories.TryGetValue(indexName, out var directory))
+        {
+            return directory;
+        }
+
+        lock (IndexLock)
+        {
+            if (IndexDirectories.TryGetValue(indexName, out directory))
+            {
+                return directory;
+            }
+
+            directory = new RAMDirectory();
+            IndexDirectories[indexName] = directory;
+            return directory;
+        }
+    }
+
+    public static RAMDirectory GetOrCreateFacetDirectory(string facetIndexName)
+    {
+        if (FacetDirectories.TryGetValue(facetIndexName, out var directory))
+        {
+            return directory;
+        }
+
+        lock (FacetLock)
+        {
+            if (FacetDirectories.TryGetValue(facetIndexName, out directory))
+            {
+                return directory;
+            }
+
+            directory = new RAMDirectory();
+            FacetDirectories[facetIndexName] = directory;
+            return directory;
+        }
+    }
+
+    private static IndexWriter GetOrCreateIndexWriter(string indexName, RAMDirectory directory)
+    {
+        if (IndexWriters.TryGetValue(indexName, out var writer))
+        {
+            return writer;
+        }
+
+        lock (IndexLock)
+        {
+            if (IndexWriters.TryGetValue(indexName, out writer))
+            {
+                return writer;
+            }
+
+            const LuceneVersion luceneVersion = LuceneVersion.LUCENE_48;
+            Analyzer standardAnalyzer = new StandardAnalyzer(luceneVersion);
+            var indexConfig = new IndexWriterConfig(luceneVersion, standardAnalyzer)
+            {
+                OpenMode = OpenMode.CREATE_OR_APPEND,
+            };
+
+            writer = new IndexWriter(directory, indexConfig);
+            IndexWriters[indexName] = writer;
+            return writer;
+        }
+    }
+
+    private static DirectoryTaxonomyWriter GetOrCreateTaxonomyWriter(string facetIndexName, RAMDirectory directory)
+    {
+        if (TaxonomyWriters.TryGetValue(facetIndexName, out var writer))
+        {
+            return writer;
+        }
+
+        lock (FacetLock)
+        {
+            if (TaxonomyWriters.TryGetValue(facetIndexName, out writer))
+            {
+                return writer;
+            }
+
+            writer = new DirectoryTaxonomyWriter(directory);
+            TaxonomyWriters[facetIndexName] = writer;
+            return writer;
+        }
+    }
+
     public void Init()
     {
         if (_initialized)
@@ -44,28 +138,17 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
             return;
         }
 
-        // Open the index directories
-        var indexPath = Path.Combine(Environment.CurrentDirectory, _indexName);
-        var indexDirectory = FSDirectory.Open(indexPath);
+        // Get or create the RAM directory for the index
+        var indexDirectory = GetOrCreateIndexDirectory(_indexName);
+        
+        // Get or create the shared index writer
+        _writer = GetOrCreateIndexWriter(_indexName, indexDirectory);
 
-        // Create an analyzer to process the text
-        const LuceneVersion luceneVersion = LuceneVersion.LUCENE_48;
-        Analyzer standardAnalyzer = new StandardAnalyzer(luceneVersion);
-        var indexConfig = new IndexWriterConfig(luceneVersion, standardAnalyzer)
+        if (_facetsConfig != null && !string.IsNullOrWhiteSpace(_facetIndexName))
         {
-            OpenMode = OpenMode.CREATE_OR_APPEND,
-        };
-
-        // Create the index writer with the above configuration
-        _writer = new IndexWriter(indexDirectory, indexConfig);
-
-        if (_facetsConfig == null || string.IsNullOrWhiteSpace(_facetIndexName))
-        {
-            return;
+            var facetDirectory = GetOrCreateFacetDirectory(_facetIndexName);
+            _taxonomyWriter = GetOrCreateTaxonomyWriter(_facetIndexName, facetDirectory);
         }
-
-        _facetIndexDirectory = FSDirectory.Open(_facetIndexName);
-        _taxonomyWriter = new DirectoryTaxonomyWriter(_facetIndexDirectory);
 
         _initialized = true;
     }
@@ -73,6 +156,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     public void AddDocument([NotNull] T generic)
     {
         var document = generic.ConvertToDocument();
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.AddDocument(GetDocument(document));
 
         Commit();
@@ -80,6 +164,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void Clear()
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.DeleteAll();
 
         Commit();
@@ -87,9 +172,9 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void AddDocuments(IEnumerable<T> documents)
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         foreach (var generic in documents)
         {
-           
             _writer?.AddDocument(GetDocument(generic));
         }
 
@@ -99,6 +184,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     public void UpdateDocument([NotNull] T generic)
     {
         var document = generic.ConvertToDocument();
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.UpdateDocument(new Term(nameof(IDocument.UniqueKey), generic.UniqueKey), GetDocument(document));
 
         Commit();
@@ -106,6 +192,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void RemoveDocument([NotNull] T generic)
     {
+        // IndexWriter is thread-safe and handles concurrent writes internally
         _writer?.DeleteDocuments(new Term(nameof(IDocument.UniqueKey), generic.UniqueKey));
 
         Commit();
@@ -113,10 +200,9 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
 
     public void Dispose()
     {
-        _taxonomyWriter?.Dispose();
-        _facetIndexDirectory?.Dispose();
-        _writer?.Dispose();
-
+        // Don't dispose shared writers and directories
+        // They are managed at the static level and shared across instances
+        // In a web application, these live for the application lifetime
         _initialized = false;
     }
 

@@ -68,7 +68,8 @@ internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
 
     private SearchResult<T> PerformSearch(Query query, int pageNumber, int pageSize)
     {
-        var searchTopDocs = _searcher!.Search(query, int.MaxValue);
+        var maxResults = (pageNumber + 1) * pageSize;
+        var searchTopDocs = _searcher!.Search(query, maxResults);
 
         var items = GetItemsPaginated(pageNumber, pageSize, searchTopDocs);
 
@@ -89,31 +90,21 @@ internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
     {
         var documents = topDocs.ScoreDocs;
         var start = pageNumber * pageSize;
+        
+        if (start >= documents.Length)
+        {
+            return Enumerable.Empty<T>();
+        }
+        
         var end = Math.Min(start + pageSize, documents.Length);
 
-        IEnumerable<T> items;
-
-        if (start > end)
-        {
-            items = Enumerable.Empty<T>();
-        }
-        else
-        {
-            items = documents[start..end].Select(hit => _searcher!.Doc(hit.Doc))
-                .Select(d => d.ConvertToObjectOfType<T>());
-        }
-
-        return items;
+        return documents[start..end].Select(hit => _searcher!.Doc(hit.Doc))
+            .Select(d => d.ConvertToObjectOfType<T>());
     }
     
     private Query AddFacetsQueries(IDictionary<string, IEnumerable<string?>?>? facets, Query query)
     {
-        if (_configuration.FacetConfiguration?.GetFacetConfig() == null)
-        {
-            return query;
-        }
-
-        if (facets == null)
+        if (_configuration.FacetConfiguration?.GetFacetConfig() == null || facets == null)
         {
             return query;
         }
@@ -126,7 +117,7 @@ internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
                 continue;
             }
 
-            foreach (var value in facet.Value.Where(p => !string.IsNullOrWhiteSpace(p)).ToArray())
+            foreach (var value in facet.Value.Where(p => !string.IsNullOrWhiteSpace(p)))
             {
                 drillDownQuery.Add(facet.Key, value);
             }
@@ -137,8 +128,8 @@ internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
 
     private void Init()
     {
-        var indexPath = Path.Combine(Environment.CurrentDirectory, _configuration.IndexName);
-        _indexDirectoryReader = DirectoryReader.Open(FSDirectory.Open(indexPath));
+        var indexDirectory = DocumentWriter<T>.GetOrCreateIndexDirectory(_configuration.IndexName);
+        _indexDirectoryReader = DirectoryReader.Open(indexDirectory);
 
         _searcher = new IndexSearcher(_indexDirectoryReader);
     }
@@ -152,7 +143,7 @@ internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
 
         var facetsCollector = new FacetsCollector();
         FacetsCollector.Search(_searcher, query, 100, facetsCollector);
-        using var facetsDirectory = FSDirectory.Open(_configuration.FacetConfiguration.IndexName);
+        var facetsDirectory = DocumentWriter<T>.GetOrCreateFacetDirectory(_configuration.FacetConfiguration.IndexName);
 
         var directoryTaxonomyReader = new DirectoryTaxonomyReader(facetsDirectory);
         var facetConfig = _configuration.FacetConfiguration.GetFacetConfig();
