@@ -6,11 +6,11 @@ using Lucene.Net.Index;
 
 namespace FullTextSearchDemo.Services;
 
-public class MovieImporterService : BackgroundService
+public class MyDataImporterService : BackgroundService
 {
     private readonly IServiceScopeFactory _serviceScopeFactory;
 
-    public MovieImporterService(IServiceScopeFactory scopeFactory)
+    public MyDataImporterService(IServiceScopeFactory scopeFactory)
     {
         _serviceScopeFactory = scopeFactory;
     }
@@ -18,9 +18,9 @@ public class MovieImporterService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var scope = _serviceScopeFactory.CreateScope();
-        var searchEngine = scope.ServiceProvider.GetRequiredService<ISearchEngine<Movie>>();
+        var searchEngine = scope.ServiceProvider.GetRequiredService<ISearchEngine<MyData>>();
 
-        var result = new SearchResult<Movie>()
+        var result = new SearchResult<MyData>()
         {
             TotalItems = 0
         };
@@ -43,7 +43,7 @@ public class MovieImporterService : BackgroundService
         await ImportMoviesAsync(searchEngine, stoppingToken);
     }
 
-    private static async Task ImportMoviesAsync(ISearchEngine<Movie> searchEngine, CancellationToken stoppingToken)
+    private static async Task ImportMoviesAsync(ISearchEngine<MyData> searchEngine, CancellationToken stoppingToken)
     {
         var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "title.basics.tsv");
 
@@ -51,7 +51,7 @@ public class MovieImporterService : BackgroundService
 
         var startTime = DateTime.Now;
         using var reader = new StreamReader(filePath);
-        var batch = new List<Movie>();
+        var batch = new List<MyData>();
         while (await reader.ReadLineAsync(stoppingToken) is { } line)
         {
             //skip headers
@@ -97,11 +97,11 @@ public class MovieImporterService : BackgroundService
         searchEngine.DisposeResources();
     }
 
-    private static Movie GetMovie(string line)
+    private static MyData GetMovie(string line)
     {
-        var fields = line.Split('\t');
+        var fields = line.Split(';');
 
-        if (fields.Length < 9)
+        if (fields.Length < 2)
         {
             Console.WriteLine($"Error: Insufficient fields - {line}");
             throw new Exception();
@@ -109,17 +109,10 @@ public class MovieImporterService : BackgroundService
 
         try
         {
-            return new Movie
+            return new MyData
             {
-                TConst = fields[0],
-                TitleType = fields[1],
-                PrimaryTitle = fields[2],
-                OriginalTitle = fields[3],
-                IsAdult = fields[4] == "1",
-                StartYear = ParseInt(fields[5]),
-                EndYear = ParseInt(fields[6]),
-                RuntimeMinutes = ParseInt(fields[7]),
-                Genres = fields[8].Split(','),
+                ID = fields[0],
+                NAME= fields[1],
             };
         }
         catch
@@ -128,25 +121,5 @@ public class MovieImporterService : BackgroundService
             throw;
         }
     }
-
-    private static int ParseInt(string value)
-    {
-        var result = ParseNullableInt(value);
-        return result ?? 0;
-    }
-
-    private static int? ParseNullableInt(string value)
-    {
-        if (value == @"\N" || string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        if (int.TryParse(value, out var result))
-        {
-            return result;
-        }
-
-        return null;
-    }
+  
 }

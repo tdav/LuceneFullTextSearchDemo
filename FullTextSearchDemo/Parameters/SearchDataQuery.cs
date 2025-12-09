@@ -1,6 +1,6 @@
 namespace FullTextSearchDemo.Parameters;
 
-public class SearchMovieQuery : MoviesQuery
+public class SearchDataQuery : MoviesQuery
 {
     public string? Term { get; set; }
 }

@@ -6,57 +6,22 @@ using FullTextSearchDemo.SearchEngine.Results;
 
 namespace FullTextSearchDemo.Services;
 
-public class MovieService : IMovieService
+public class MovieService : IMyDataService
 {
-    private readonly ISearchEngine<Movie> _searchEngine;
+    private readonly ISearchEngine<MyData> _searchEngine;
 
-    public MovieService(ISearchEngine<Movie> searchEngine)
+    public MovieService(ISearchEngine<MyData> searchEngine)
     {
         _searchEngine = searchEngine;
     }
 
-    public SearchResult<Movie> GetMovies(GetMoviesQuery query)
+    public SearchResult<MyData> Get(GetDataQuery query)
     {
         var searchFields = new Dictionary<string, string?>();
-
-        if (query.PrimaryTitle != null)
+               
+        if (query.Name != null)
         {
-            searchFields.Add(nameof(query.PrimaryTitle), query.PrimaryTitle);
-        }
-
-        if (query.OriginalTitle != null)
-        {
-            searchFields.Add(nameof(query.OriginalTitle), query.OriginalTitle);
-        }
-
-        if (query.TitleType != null)
-        {
-            searchFields.Add(nameof(query.TitleType), query.TitleType);
-        }
-
-        if (query.IsAdult != null)
-        {
-            searchFields.Add(nameof(query.IsAdult), query.IsAdult.ToString());
-        }
-
-        if (query.StartYear != null)
-        {
-            searchFields.Add(nameof(query.StartYear), query.StartYear.ToString());
-        }
-
-        if (query.EndYear != null)
-        {
-            searchFields.Add(nameof(query.EndYear), query.EndYear.ToString());
-        }
-
-        if (query.RuntimeMinutes != null)
-        {
-            searchFields.Add(nameof(query.RuntimeMinutes), query.RuntimeMinutes.ToString());
-        }
-
-        if (query.Genres != null)
-        {
-            searchFields.Add(nameof(query.Genres), string.Join(",", query.Genres));
+            searchFields.Add(nameof(query.Name), query.Name);
         }
 
         var facets = GetFacets(query);
@@ -71,7 +36,7 @@ public class MovieService : IMovieService
         });
     }
 
-    public SearchResult<Movie> SearchMovies(SearchMovieQuery query)
+    public SearchResult<MyData> Search(SearchDataQuery query)
     {
         var facets = GetFacets(query);
 
@@ -85,7 +50,7 @@ public class MovieService : IMovieService
         });
     }
 
-    public SearchResult<Movie> FullTextSearchMovies(SearchMovieQuery query)
+    public SearchResult<MyData> FullTextSearch(SearchDataQuery query)
     {
         var facets = GetFacets(query);
         return _searchEngine.Search(new FullTextSearchQuery
@@ -100,14 +65,10 @@ public class MovieService : IMovieService
     private static IDictionary<string, IEnumerable<string?>?> GetFacets(MoviesQuery query)
     {
         var facets = new Dictionary<string, IEnumerable<string?>?>();
-        if (query.FacetGenreFacets != null)
+        
+        if (query.NameFacets != null)
         {
-            facets.Add(nameof(Movie.Genres), query.FacetGenreFacets);
-        }
-
-        if (query.TitleTypeFacets != null)
-        {
-            facets.Add(nameof(Movie.TitleType), query.TitleTypeFacets);
+            facets.Add(nameof(MyData.NAME), query.NameFacets);
         }
 
         return facets;

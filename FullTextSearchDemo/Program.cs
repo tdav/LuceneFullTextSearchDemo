@@ -2,6 +2,7 @@ using FullTextSearchDemo.Endpoints;
 using FullTextSearchDemo.Search;
 using FullTextSearchDemo.SearchEngine;
 using FullTextSearchDemo.Services;
+using Scalar.AspNetCore;
 
 public partial class Program
 {
@@ -9,45 +10,29 @@ public partial class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // Add memory cache for search results caching
         builder.Services.AddMemoryCache();
-        
-        // Add response compression
-        builder.Services.AddResponseCompression(options =>
-        {
-            options.EnableForHttps = true;
-        });
 
-        builder.Services.AddEndpointsApiExplorer();
-        builder.Services.AddSwaggerGen();
+        builder.Services.AddOpenApi();
 
-        // Register services
-        builder.Services.AddScoped<IProductService, ProductService>();
-        builder.Services.AddScoped<IMovieService, MovieService>();
+        builder.Services.AddScoped<IMyDataService, MovieService>();
         builder.Services.AddScoped<ISearchCacheService, SearchCacheService>();
         builder.Services.AddScoped<IMyDocService, MyDocService>();
         
-        builder.Services.AddSearchEngineServices(new ProductConfiguration());
-        builder.Services.AddSearchEngineServices(new MoviesConfiguration());
+        builder.Services.AddSearchEngineServices(new MyDataConfiguration());
 
-        builder.Services.AddHostedService<MovieImporterService>();
+        builder.Services.AddHostedService<MyDataImporterService>();
 
         var app = builder.Build();
 
-        // Use response compression
-        app.UseResponseCompression();
+        app.MapOpenApi();
+        app.MapScalarApiReference("/docs", options =>
+        {
+            options.WithTitle("My Full Text Search");
+        });
 
-        app.UseSwagger();
-        app.UseSwaggerUI();
-
-        app.UseHttpsRedirection();
-
-        app.UseAuthorization();
-
-        // Map Minimal API endpoints
         var docsGroup = app.MapGroup("/api/docs")
             .WithOpenApi();
-        
+
         docsGroup.MapMyDocEndpoints();
 
         app.Run();

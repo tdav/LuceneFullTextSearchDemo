@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using FullTextSearchDemo.SearchEngine.Configuration;
 using FullTextSearchDemo.SearchEngine.Helpers;
 using FullTextSearchDemo.SearchEngine.Models;
@@ -11,7 +9,8 @@ using Lucene.Net.Facet.Taxonomy.Directory;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
-using LuceneDirectory = Lucene.Net.Store.Directory;
+using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace FullTextSearchDemo.SearchEngine.Services;
 
@@ -21,6 +20,7 @@ internal sealed class DocumentWriter<T> : IDisposable, IDocumentWriter<T> where 
     private static readonly ConcurrentDictionary<string, RAMDirectory> FacetDirectories = new();
     private static readonly ConcurrentDictionary<string, IndexWriter> IndexWriters = new();
     private static readonly ConcurrentDictionary<string, DirectoryTaxonomyWriter> TaxonomyWriters = new();
+
     private static readonly object IndexLock = new();
     private static readonly object FacetLock = new();
 
