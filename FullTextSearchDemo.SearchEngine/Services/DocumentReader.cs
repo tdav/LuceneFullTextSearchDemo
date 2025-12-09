@@ -16,6 +16,8 @@ namespace FullTextSearchDemo.SearchEngine.Services;
 
 internal sealed class DocumentReader<T> : IDocumentReader<T> where T : IDocument
 {
+    private Lucene.Net.Store.RAMDirectory? _ramDirectory;
+
     private readonly IIndexConfiguration<T> _configuration;
     private DirectoryReader? _indexDirectoryReader;
     private IndexSearcher? _searcher;
